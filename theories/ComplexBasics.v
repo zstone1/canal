@@ -36,6 +36,21 @@ Lemma explodeE : forall f g,
   explode f g <-> {in A, f =1 g}.
 Proof. done. Qed.
 
+Lemma explode_trans : forall f g h, 
+  explode f g -> explode g h -> explode f h.
+Proof.
+  move => ? ? ? /explodeE L /explodeE R.
+  apply/explodeE => ??.
+  rewrite ?L ?R //=.
+Qed.
+
+Lemma explode_sym : forall f g, 
+  explode f g -> explode g f .
+Proof.
+  move => ? ? /explodeE L.
+  apply/explodeE => ??.
+  rewrite ?L //=.
+Qed.
 
 Lemma explode_setT : explode_set setT = setT.
 Proof.
@@ -180,53 +195,30 @@ Proof.
   move => -> //=.
 Qed.
 
-    
-Lemma explode_pairs_lhs : forall I (f g: U -> V), 
-  fct_ent I -> 
-    (explode_pairs A I (f,g) <-> 
-      exists g', explode A g g' /\ I (f, g')
-    ).
+Lemma restricted_ent_eq :
+  restricted_nbhs_filter = nbhs_ (restricted_ent).
 Proof.
-  move => I f g eI.
-  split.
-  - move => [[f' g']] Ifg [ /= e1 e2].
-    exists (patch f g').
-    split.
-    1: by move => ??; rewrite e2.
-    case: eI => B eI Q.
-    apply Q.
-
-    
-  - move => [g' [L R]]; exists (f,g').
-    1: done.
-    split => /=.
-    1: apply explode_refl.
-    move => ??; rewrite L; done.
-
-  
-  move => t /= [[g1 g2] gI [] /= E1 E2] .
-    exists g2 => /=.
-    2: done.
-    move: fI => [B eB] M.
-    apply: M => /=.
-
-    unfold fct_ent, filter_from in fI.
-    simpl in *.
-  - 
-
-Lemma restricted_ent_eq : forall f,
-  restricted_nbhs_filter f = nbhs_ (restricted_ent) f.
-Proof.
-  move => f.
+  apply:funext => f.
   rewrite eqEsubset; split.
   - move => P [Q [M N]].
     have : (nbhs f Q) by apply: M.
-    rewrite nbhsP /nbhs_ /filter_from /= => /exists2P [i [L1 L2]].
-    exists (explode_pairs A i).
-    1: by apply restricted_ent_explode.
+    rewrite nbhsP /nbhs_ /filter_from /= => /exists2P [I [[B L1] L2]].
+    pose B' := [set fg : ((U -> V) * (U -> V)) | (forall t, B (fg.1 t, fg.2 t))].
+    exists (explode_pairs A B').
+    1: by apply: restricted_ent_explode; exists B.
     apply: subset_trans.
     2: apply: N.
-    admit.
+    move => t /= W.
+    exists (patch f t).
+    2: apply explode_sym, explode_patch.
+    apply: b => /=.
+    apply: L2 => /= u.
+    rewrite /patch.
+    case uA : `[< A u >] => /=.
+    2: apply entourage_refl; apply L1.
+    move: W => [[f' t']].
+    rewrite /B' /= => L [/= /explodeE W1 /explodeE W2].
+    by rewrite -?W1 -?W2.
   - move => P [rI [I [? S] N]].
     exists [set y | I (f,y)]; split.
     1: by exists I.
@@ -240,24 +232,42 @@ Proof.
     1: apply explode_refl.
     done.
 Qed.
-    rewrite /explode_pairs /explode_set /= => /exists2P [[g1 g2] [? O]].
-    rewrite /explode_r /setM /set1 /= in O.
-    exists g2.
-
-    apply: L2 => /=; by apply: entourage_refl.
-
     
     
-Program Definition restricted_uniformMixin := @topologyOfFilterMixin 
+Program Definition restricted_uniformMixin := @UniformMixin 
   (U -> V)
   restricted_nbhs_filter
-  (fun p => 
-    @restricted_prop_filter U V A ([filter of p]) _)
+  restricted_ent
   _
   _
+  _
+  _
+  restricted_ent_eq
   .
 Next Obligation.
-Proof.
+Admitted.
+Next Obligation.
+  move => [f g /=] ->.
+  case: H => [I [eI J]].
+  apply J.
+  exists (g, g).
+  2: split => /=; apply explode_refl.
+  by apply: entourage_refl.
+Qed.
+Next Obligation.
+  case: H => [I [/fct_ent_inv eI J]].
+  exists [set xy | I(xy.2, xy.1)].
+  split.
+  1: done.
+  move => [f g] [[f' g'] /= gfI] [/= L R].
+  apply: J.
+  by exists (g',f').
+Qed.
+Next Obligation.
+  case: H => [I [/fct_ent_split [J eJ] S1 S2]].
+  exists explode_pairs
+
+
   case: H => P [[ X Y Z ] W].
   apply: W.
   exists p; last by apply: explode_refl.
