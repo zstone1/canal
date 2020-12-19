@@ -18,12 +18,22 @@ Open Scope ring_scope.
 
 (** We first need to discuss restricting functions to a region*)
 Section DomainRestrictions.
+Record dom_restricted {U V: Type} (A : set U) := {
+  f : U -> V
+}.
+Coercion f : dom_restricted >-> Funclass.
+
 Context {U V : Type}.
 Variable (A : set U).
-Local Definition explode (f : U -> V) :=
-  [set g : U -> V | {in A, f =1 g} ].
 
-Local Definition explode_set (X : set (U -> V)) := 
+
+
+Notation DR := (@dom_restricted U V A).
+
+Local Definition explode (f : DR) :=
+  [set g : DR | {in A, f =1 g} ].
+
+Local Definition explode_set (X : set DR) := 
   \bigcup_(f in X) explode f.
 
 Lemma explode_refl: forall f, explode f f.
@@ -62,7 +72,7 @@ Proof.
     eauto.
 Qed.
 
-Definition restricted (F : set (set (U -> V))) :=
+Definition restricted (F : set (set DR)) :=
   [set Q | (exists P, F P /\ explode_set P `<=` Q)].
 
 Global Instance restricted_filter F: Filter F -> Filter (restricted F).
@@ -96,10 +106,10 @@ Proof.
     exact W2.
 Qed.
 
-Canonical restricted_filter_on (F: filter_on (U -> V)) := 
+Canonical restricted_filter_on (F: filter_on DR) := 
   FilterType (restricted F) (restricted_filter _) .
 
-Lemma restricted_filter_not_emtpy : forall (F: pfilter_on (U -> V)),
+Lemma restricted_filter_not_emtpy : forall (F: pfilter_on DR),
   ~ restricted F set0.
 Proof.
   move => [F1 [N ?]] [P [M W]].
@@ -133,19 +143,23 @@ Proof.
   apply explode_refl.
 Qed.
 
-Canonical restricted_pfilter_on (F: pfilter_on (U -> V)) := 
+Canonical restricted_pfilter_on (F: pfilter_on DR) := 
   PFilterType (restricted F) (@restricted_filter_not_emtpy _) .
 
-Definition explode_pair ( fg : (U -> V) * (U -> V)) :=
+Definition explode_pair ( fg : DR * DR) :=
   explode (fg.1) `*` explode (fg.2).
 
-Definition explode_pairs ( X : set ((U -> V) * (U -> V))) :=
+Definition explode_pairs ( X : set (DR * DR)) :=
   \bigcup_(f in X) explode_pair f.
 
-Definition restrict_ent (E : set(set((U -> V) * (U -> V)))) :=
+Definition restrict_ent (E : set(set(DR * DR))) :=
   [set Q | (exists P, E P /\ explode_pairs P `<=` Q)].
 
 End DomainRestrictions.
+
+Notation "U |_ A => V" := (@dom_restricted U V A) (at level 0).
+
+Definition foo := nat|_setT => nat.
 
 Section RestrictionTopology.
 Context {U : choiceType} {V : uniformType}.
@@ -233,19 +247,36 @@ Proof.
     done.
 Qed.
     
+Lemma restricted_ent_filter : Filter restricted_ent.
+Proof.
+  constructor.
+  - exists setT; split.
+    1: apply filterT.
+    done.
+  - move => P Q [P' [X1 X2]] [Q' [Y1 Y2]].
+    exists (P' `&` Q').
+    split.
+    1: by apply: filterI.
+    move => [f g] [/= [f' g'] [??] ?].
+    split;[apply: X2 | apply: Y2];
+      by exists (f', g').
+  - move => P Q S [P' [X1 X2]].
+    exists (P').
+    split.
+    1: done.
+    apply: subset_trans; eauto.
+Qed.
     
 Program Definition restricted_uniformMixin := @UniformMixin 
   (U -> V)
   restricted_nbhs_filter
   restricted_ent
-  _
+  restricted_ent_filter
   _
   _
   _
   restricted_ent_eq
   .
-Next Obligation.
-Admitted.
 Next Obligation.
   move => [f g /=] ->.
   case: H => [I [eI J]].
@@ -265,7 +296,30 @@ Next Obligation.
 Qed.
 Next Obligation.
   case: H => [I [/fct_ent_split [J eJ] S1 S2]].
-  exists explode_pairs
+  move: eJ => [/=B eJ S3].
+  pose B' := [set fg : ((U -> V) * (U -> V)) | (forall t, B (fg.1 t, fg.2 t))].
+  exists (explode_pairs A B').
+  1: by apply: restricted_ent_explode; exists B.
+  apply: subset_trans.
+  2: apply S2.
+  move => [f h] /= [g [[f' g1']] X1 [/=? M1]] [[g2' h'] Y1 [/=M2 ?]].
+  exists (patch g1' f', patch g1' h').
+  2: split => /=; apply: explode_trans; eauto; 
+     apply explode_sym, explode_patch. 
+  apply S1 => /=.
+  exists g1'; apply S3 => /= u;
+  rewrite /patch /=;
+  case uA : `[< A u >] => /=.
+  2,4: by apply entourage_refl.
+  1: apply: X1.
+  rewrite ?M1 -?M2; eauto.
+Qed.
+
+Definition restricted_topologicalType_mixin :=  
+  topologyOfEntourageMixin restricted_uniformMixin.
+
+Canonical restricted_fct_uniformType := 
+  UniformType dom_restricted restricted_uniformMixin.
 
 
   case: H => P [[ X Y Z ] W].
